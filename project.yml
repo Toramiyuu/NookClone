@@ -1,0 +1,45 @@
+name: NookClone
+options:
+  bundleIdPrefix: com.nookclone
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+
+targets:
+  NookClone:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: NookClone
+        excludes:
+          - "**/*.md"
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_ENTITLEMENTS: NookClone/NookClone.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.nookclone.app
+        INFOPLIST_FILE: NookClone/Info.plist
+        ENABLE_HARDENED_RUNTIME: "NO"
+        OTHER_LDFLAGS:
+          - "-framework ScriptingBridge"
+          - "-framework IOKit"
+          - "-framework EventKit"
+          - "-framework AVFoundation"
+          - "-framework Accelerate"
+          - "-framework CoreLocation"
+          - "-framework IOBluetooth"
+    entitlements:
+      path: NookClone/NookClone.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.automation.apple-events: true

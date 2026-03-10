@@ -1,0 +1,29 @@
+# Build artifacts
+build/
+DerivedData/
+
+# Stale duplicate project
+NookClone 2.xcodeproj/
+
+# Xcode user data
+*.xcuserdata/
+xcuserdata/
+*.xcuserdatad/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Swift Package Manager
+.build/
+*.resolved
+
+# Xcode
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+!default.pbxuser
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
