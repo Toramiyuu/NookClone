@@ -1,6 +1,34 @@
 import AppKit
 import SwiftUI
 
+/// Notification payload carrying a HUD event into the notch pill.
+class HUDEvent: NSObject {
+    let type: HUDType
+    let value: Float
+
+    init(type: HUDType, value: Float) {
+        self.type = type
+        self.value = value
+    }
+
+    var iconName: String {
+        switch type {
+        case .volume(let muted):
+            if muted || value == 0 { return "speaker.slash.fill" }
+            if value < 0.33 { return "speaker.fill" }
+            if value < 0.66 { return "speaker.wave.1.fill" }
+            return "speaker.wave.3.fill"
+        case .brightness:
+            return "sun.max.fill"
+        }
+    }
+
+    var barColor: Color {
+        if case .brightness = type { return .yellow }
+        return .white
+    }
+}
+
 /// Borderless overlay window that displays volume/brightness HUD.
 class HUDOverlayWindow: NSWindow {
 
@@ -31,6 +59,13 @@ class HUDOverlayWindow: NSWindow {
     }
 
     func show(type: HUDType, value: Float) {
+        // Route into the notch pill first
+        NotificationCenter.default.post(
+            name: .notchHUDEvent,
+            object: HUDEvent(type: type, value: value)
+        )
+
+        // Also show the floating overlay (user can reposition / disable in settings)
         hostingController?.rootView = HUDContainerView(type: type, value: value)
         reposition()
 

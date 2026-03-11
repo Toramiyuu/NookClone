@@ -13,6 +13,7 @@ class NotchWindowController: NSWindowController {
     private(set) var isExpanded = false
     private var isPinned = false
     private var hoverTimer: Timer?
+    private var isHoveringCollapsed = false
     private var cancellables = Set<AnyCancellable>()
     private var currentWidgetHeight: CGFloat = 160
 
@@ -98,9 +99,17 @@ class NotchWindowController: NSWindowController {
     private func checkHover() {
         let mouse = NSEvent.mouseLocation
         if !isExpanded {
-            guard GeneralSettings.shared.openOnHover else { return }
-            if collapsedFrame.contains(mouse) { expand() }
+            let hovering = collapsedFrame.contains(mouse)
+            if hovering != isHoveringCollapsed {
+                isHoveringCollapsed = hovering
+                NotificationCenter.default.post(name: .notchPillHoverChanged, object: hovering)
+            }
+            if hovering && GeneralSettings.shared.openOnHover { expand() }
         } else if !isPinned {
+            if isHoveringCollapsed {
+                isHoveringCollapsed = false
+                NotificationCenter.default.post(name: .notchPillHoverChanged, object: false)
+            }
             if let frame = window?.frame, !frame.contains(mouse) { collapseIfNeeded() }
         }
     }
@@ -124,12 +133,23 @@ class NotchWindowController: NSWindowController {
             name: .notchPanelHeightChanged,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleCollapseRequested),
+            name: .notchPanelCollapseRequested,
+            object: nil
+        )
+    }
+
+    @objc private func handleCollapseRequested() {
+        collapse()
     }
 
     // MARK: - Expand / Collapse
 
     func expand() {
         guard !isExpanded else { return }
+        ActiveAppTracker.shared.captureActiveApp()
         isExpanded = true
         window?.ignoresMouseEvents = false
         window?.hasShadow = true

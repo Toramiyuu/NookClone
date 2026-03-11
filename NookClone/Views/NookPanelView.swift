@@ -4,6 +4,9 @@ import SwiftUI
 struct NookPanelView: View {
 
     @State private var isExpanded = false
+    @State private var isPillHovered = false
+    @State private var hudInfo: HUDEvent? = nil
+    @State private var hudDismissTask: DispatchWorkItem? = nil
     @ObservedObject private var media = MediaManager.shared
 
     private var showLiveNotch: Bool { media.currentTrack != nil && !isExpanded }
@@ -48,21 +51,82 @@ struct NookPanelView: View {
                 isExpanded = expanded
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .notchPillHoverChanged)) { note in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isPillHovered = (note.object as? Bool) ?? false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .notchHUDEvent)) { note in
+            guard let event = note.object as? HUDEvent else { return }
+            hudDismissTask?.cancel()
+            withAnimation(.easeInOut(duration: 0.2)) { hudInfo = event }
+            let task = DispatchWorkItem {
+                withAnimation(.easeInOut(duration: 0.2)) { hudInfo = nil }
+            }
+            hudDismissTask = task
+            DispatchQueue.main.asyncAfter(deadline: .now() + HUDSettings.shared.dismissTimeout, execute: task)
+        }
     }
 
     private var notchPill: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(.black)
-            if let track = media.currentTrack, !isExpanded {
+
+            // Hover glow — additive white overlay, no content switch
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.white.opacity(isPillHovered && !isExpanded ? 0.06 : 0))
+                .animation(.easeInOut(duration: 0.15), value: isPillHovered)
+
+            // Priority: HUD > live media > clock
+            if let event = hudInfo, !isExpanded {
+                pillHUDContent(event: event)
+                    .transition(.opacity)
+            } else if let track = media.currentTrack, !isExpanded {
                 liveNotchContent(track: track)
+                    .transition(.opacity)
+            } else if !isExpanded {
+                pillClock
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.35), value: showLiveNotch)
+        .animation(.easeInOut(duration: 0.2), value: hudInfo != nil)
         .frame(width: 162, height: 32)
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    // MARK: - Pill content layers
+
+    private var pillClock: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
+            Text(Date(), format: .dateTime.hour().minute())
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+                .monospacedDigit()
+        }
+    }
+
+    @ViewBuilder
+    private func pillHUDContent(event: HUDEvent) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: event.iconName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 14)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.2))
+                    Capsule()
+                        .fill(event.barColor)
+                        .frame(width: max(0, geo.size.width * CGFloat(event.value)))
+                        .animation(.spring(response: 0.2), value: event.value)
+                }
+            }
+            .frame(height: 4)
+        }
+        .padding(.horizontal, 14)
     }
 
     @ViewBuilder
@@ -137,7 +201,10 @@ private struct NotchMiniSpectrograph: View {
 }
 
 extension Notification.Name {
-    static let notchPanelExpandedChanged = Notification.Name("notchPanelExpandedChanged")
-    static let notchPanelTapped          = Notification.Name("notchPanelTapped")
-    static let notchPanelHeightChanged   = Notification.Name("notchPanelHeightChanged")
+    static let notchPanelExpandedChanged  = Notification.Name("notchPanelExpandedChanged")
+    static let notchPanelTapped           = Notification.Name("notchPanelTapped")
+    static let notchPanelHeightChanged    = Notification.Name("notchPanelHeightChanged")
+    static let notchPillHoverChanged      = Notification.Name("notchPillHoverChanged")
+    static let notchHUDEvent              = Notification.Name("notchHUDEvent")
+    static let notchPanelCollapseRequested = Notification.Name("notchPanelCollapseRequested")
 }

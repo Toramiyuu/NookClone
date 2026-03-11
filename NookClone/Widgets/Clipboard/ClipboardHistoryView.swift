@@ -3,7 +3,7 @@ import SwiftUI
 struct ClipboardHistoryView: View {
 
     @ObservedObject private var manager = ClipboardManager.shared
-    @State private var copiedID: UUID? = nil
+    @State private var pastedID: UUID? = nil
 
     var body: some View {
         if manager.items.isEmpty {
@@ -12,11 +12,11 @@ struct ClipboardHistoryView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 4) {
                     ForEach(manager.items) { item in
-                        ClipboardItemRow(item: item, copiedID: $copiedID) {
-                            manager.copyItem(item)
-                            withAnimation { copiedID = item.id }
+                        ClipboardItemRow(item: item, pastedID: $pastedID) {
+                            manager.pasteItem(item)
+                            withAnimation { pastedID = item.id }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                if copiedID == item.id { copiedID = nil }
+                                if pastedID == item.id { pastedID = nil }
                             }
                         } onDelete: {
                             withAnimation { manager.remove(item) }
@@ -43,27 +43,22 @@ struct ClipboardHistoryView: View {
 
 private struct ClipboardItemRow: View {
     let item: ClipboardItem
-    @Binding var copiedID: UUID?
-    let onCopy: () -> Void
+    @Binding var pastedID: UUID?
+    let onPaste: () -> Void
     let onDelete: () -> Void
 
-    private var isCopied: Bool { copiedID == item.id }
+    private var isPasted: Bool { pastedID == item.id }
 
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: onCopy) {
+            Button(action: onPaste) {
                 HStack(spacing: 6) {
-                    Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                    Image(systemName: isPasted ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 10))
-                        .foregroundStyle(isCopied ? .green : .white.opacity(0.4))
+                        .foregroundStyle(isPasted ? .green : .white.opacity(0.4))
                         .frame(width: 14)
 
-                    Text(item.text)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    rowContent
 
                     Text(item.date, style: .time)
                         .font(.system(size: 9))
@@ -71,7 +66,7 @@ private struct ClipboardItemRow: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(.white.opacity(isCopied ? 0.1 : 0.05), in: RoundedRectangle(cornerRadius: 6))
+                .background(.white.opacity(isPasted ? 0.1 : 0.05), in: RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
 
@@ -81,6 +76,33 @@ private struct ClipboardItemRow: View {
                     .foregroundStyle(.white.opacity(0.3))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        switch item.kind {
+        case .text(let s):
+            Text(s)
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .image(let data):
+            if let image = NSImage(data: data) {
+                HStack(spacing: 6) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 32, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                    Text("Image")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 }

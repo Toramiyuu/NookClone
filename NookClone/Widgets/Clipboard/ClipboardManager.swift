@@ -3,14 +3,19 @@ import Combine
 
 struct ClipboardItem: Identifiable, Codable {
     let id: UUID
-    let text: String
     let date: Date
+    let kind: Kind
 
-    init(text: String) {
-        self.id = UUID()
-        self.text = text
-        self.date = Date()
+    enum Kind: Codable {
+        case text(String)
+        case image(Data)   // PNG data
     }
+
+    init(text: String)    { id = UUID(); date = Date(); kind = .text(text) }
+    init(imageData: Data) { id = UUID(); date = Date(); kind = .image(imageData) }
+
+    var displayText: String? { guard case .text(let s) = kind else { return nil }; return s }
+    var imageData: Data?     { guard case .image(let d) = kind else { return nil }; return d }
 }
 
 class ClipboardManager: ObservableObject {
@@ -91,16 +96,23 @@ class ClipboardManager: ObservableObject {
         lastChangeCount = count
 
         if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
-            DispatchQueue.main.async { self.addItem(text: text) }
+            DispatchQueue.main.async { self.addItem(ClipboardItem(text: text)) }
+        } else if let images = NSPasteboard.general.readObjects(forClasses: [NSImage.self]) as? [NSImage],
+                  let first = images.first,
+                  let tiff = first.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiff),
+                  let png = bitmap.representation(using: .png, properties: [:]) {
+            DispatchQueue.main.async { self.addItem(ClipboardItem(imageData: png)) }
         }
     }
 
     // MARK: - Management
 
-    func addItem(text: String) {
-        // Don't duplicate consecutive identical items
-        if items.first?.text == text { return }
-        let item = ClipboardItem(text: text)
+    func addItem(_ item: ClipboardItem) {
+        // Don't duplicate consecutive identical text items
+        if case .text(let new) = item.kind,
+           case .text(let existing) = items.first?.kind,
+           new == existing { return }
         items.insert(item, at: 0)
         if items.count > maxItems { items = Array(items.prefix(maxItems)) }
         saveToDisk()
@@ -108,8 +120,24 @@ class ClipboardManager: ObservableObject {
 
     func copyItem(_ item: ClipboardItem) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(item.text, forType: .string)
+        switch item.kind {
+        case .text(let s):
+            NSPasteboard.general.setString(s, forType: .string)
+        case .image(let data):
+            if let image = NSImage(data: data) {
+                NSPasteboard.general.writeObjects([image])
+            }
+        }
         lastChangeCount = NSPasteboard.general.changeCount
+    }
+
+    /// Copy item to pasteboard, collapse the panel, then paste into the previously active app.
+    func pasteItem(_ item: ClipboardItem) {
+        copyItem(item)
+        NotificationCenter.default.post(name: .notchPanelCollapseRequested, object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            ActiveAppTracker.shared.pasteIntoPreviousApp()
+        }
     }
 
     func remove(_ item: ClipboardItem) {
@@ -130,9 +158,17 @@ class ClipboardManager: ObservableObject {
     }
 
     private func loadFromDisk() {
-        guard let data = try? Data(contentsOf: savePath),
-              let saved = try? JSONDecoder().decode([ClipboardItem].self, from: data) else { return }
-        items = saved
+        guard let data = try? Data(contentsOf: savePath) else { return }
+        if let saved = try? JSONDecoder().decode([ClipboardItem].self, from: data) {
+            items = saved
+        } else {
+            // Migrate from old text-only schema
+            struct LegacyItem: Decodable { let id: UUID; let text: String; let date: Date }
+            if let old = try? JSONDecoder().decode([LegacyItem].self, from: data) {
+                items = old.map { ClipboardItem(text: $0.text) }
+                saveToDisk()
+            }
+        }
     }
 }
 

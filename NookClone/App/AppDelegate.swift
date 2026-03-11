@@ -132,3 +132,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // The local monitor still works when NookClone is focused.
     }
 }
+
+// MARK: - Active app tracking (for clipboard paste-back)
+
+class ActiveAppTracker {
+    static let shared = ActiveAppTracker()
+    private(set) var previousApp: NSRunningApplication?
+    private init() {}
+
+    /// Call just before the notch panel expands so we know where to paste back.
+    func captureActiveApp() {
+        previousApp = NSWorkspace.shared.runningApplications.first {
+            $0.isActive && $0.bundleIdentifier != Bundle.main.bundleIdentifier
+        }
+    }
+
+    /// Activate the previously captured app and send ⌘V into it.
+    func pasteIntoPreviousApp() {
+        guard let app = previousApp else { return }
+        app.activate()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            let src  = CGEventSource(stateID: .combinedSessionState)
+            let down = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+            let up   = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+            down?.flags = .maskCommand
+            up?.flags   = .maskCommand
+            down?.post(tap: .cgAnnotatedSessionEventTap)
+            up?.post(tap: .cgAnnotatedSessionEventTap)
+        }
+    }
+}
