@@ -35,7 +35,7 @@ class WidgetRegistry: ObservableObject {
                 title: "Media",
                 icon: "music.note",
                 isEnabled: true,
-                preferredHeight: 160,
+                preferredHeight: 200,
                 makeBody: { AnyView(MediaWidgetView()) },
                 makeSettingsView: { AnyView(MediaWidgetSettingsView()) }
             ),
@@ -44,7 +44,7 @@ class WidgetRegistry: ObservableObject {
                 title: "Calendar",
                 icon: "calendar",
                 isEnabled: true,
-                preferredHeight: 190,
+                preferredHeight: 230,
                 makeBody: { AnyView(CalendarDayView()) },
                 makeSettingsView: { AnyView(CalendarWidgetSettingsView()) }
             ),
@@ -89,7 +89,7 @@ class WidgetRegistry: ObservableObject {
                 title: "Clipboard",
                 icon: "clipboard",
                 isEnabled: true,
-                preferredHeight: 190,
+                preferredHeight: 230,
                 makeBody: { AnyView(ClipboardHistoryView()) },
                 makeSettingsView: { AnyView(ClipboardSettingsView()) }
             ),
@@ -107,7 +107,7 @@ class WidgetRegistry: ObservableObject {
                 title: "Weather",
                 icon: "cloud.sun.fill",
                 isEnabled: true,
-                preferredHeight: 160,
+                preferredHeight: 200,
                 makeBody: { AnyView(WeatherView()) },
                 makeSettingsView: { AnyView(WeatherSettingsView()) }
             ),

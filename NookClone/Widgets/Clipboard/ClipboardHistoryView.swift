@@ -24,7 +24,6 @@ struct ClipboardHistoryView: View {
                     }
                 }
             }
-            .frame(maxHeight: 110)
         }
     }
 

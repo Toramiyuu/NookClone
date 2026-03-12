@@ -9,6 +9,7 @@ class NotchWindowController: NSWindowController {
 
     private(set) var collapsedFrame: NSRect = .zero
     private(set) var expandedFrame: NSRect = .zero
+    private(set) var liveFrame: NSRect = .zero
 
     private(set) var isExpanded = false
     private var isPinned = false
@@ -16,7 +17,9 @@ class NotchWindowController: NSWindowController {
     private var hoverTimer: Timer?
     private var isHoveringCollapsed = false
     private var cancellables = Set<AnyCancellable>()
-    private var currentWidgetHeight: CGFloat = 160
+    private var currentWidgetHeight: CGFloat = 200
+    private var isLive = false
+    private let livePillExtraHeight: CGFloat = 10
 
     init(screen: NSScreen) {
         self.targetScreen = screen
@@ -29,6 +32,7 @@ class NotchWindowController: NSWindowController {
         setupNotifications()
         startHoverMonitor()
         subscribeToSettings()
+        subscribeToMediaState()
     }
 
     required init?(coder: NSCoder) { fatalError("not implemented") }
@@ -42,6 +46,16 @@ class NotchWindowController: NSWindowController {
         let settings = GeneralSettings.shared
 
         collapsedFrame = notchRect
+
+        let liveWidth: CGFloat = 320
+        let liveX = (notchRect.midX - liveWidth / 2)
+            .clamped(to: screenFrame.minX...(screenFrame.maxX - liveWidth))
+        liveFrame = NSRect(
+            x: liveX,
+            y: notchRect.minY - livePillExtraHeight,
+            width: liveWidth,
+            height: notchRect.height + livePillExtraHeight
+        )
 
         let panelWidth: CGFloat = max(notchRect.width + 200, 520) + settings.notchWidthOffset
         let panelHeight: CGFloat = widgetHeight + settings.notchHeightOffset
@@ -70,7 +84,7 @@ class NotchWindowController: NSWindowController {
 
     private func embedContentView() {
         guard let window else { return }
-        let hosting = NSHostingView(rootView: NookPanelView())
+        let hosting = ClickThroughHostingView(rootView: NookPanelView())
         hosting.autoresizingMask = [.width, .height]
         window.contentView = hosting
     }
@@ -83,10 +97,32 @@ class NotchWindowController: NSWindowController {
             .sink { [weak self] _, _ in
                 guard let self else { return }
                 self.computeFrames(widgetHeight: self.currentWidgetHeight)
-                let frame = self.isExpanded ? self.expandedFrame : self.collapsedFrame
+                let frame = self.isExpanded ? self.expandedFrame : (self.isLive ? self.liveFrame : self.collapsedFrame)
                 self.window?.setFrame(frame, display: true, animate: true)
             }
             .store(in: &cancellables)
+    }
+
+    private func subscribeToMediaState() {
+        MediaManager.shared.$currentTrack
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] track in
+                self?.setLive(track != nil)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func setLive(_ live: Bool) {
+        guard live != isLive else { return }
+        isLive = live
+        guard !isExpanded else { return }
+        let targetFrame = live ? liveFrame : collapsedFrame
+        window?.ignoresMouseEvents = !live
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.5
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window?.animator().setFrame(targetFrame, display: true)
+        }
     }
 
     private func startHoverMonitor() {
@@ -100,7 +136,7 @@ class NotchWindowController: NSWindowController {
     private func checkHover() {
         let mouse = NSEvent.mouseLocation
         if !isExpanded {
-            let hovering = collapsedFrame.contains(mouse)
+            let hovering = (isLive ? liveFrame : collapsedFrame).contains(mouse)
             if hovering != isHoveringCollapsed {
                 isHoveringCollapsed = hovering
                 NotificationCenter.default.post(name: .notchPillHoverChanged, object: hovering)
@@ -152,8 +188,9 @@ class NotchWindowController: NSWindowController {
         guard !isExpanded else { return }
         ActiveAppTracker.shared.captureActiveApp()
         isExpanded = true
-        window?.ignoresMouseEvents = false
         window?.hasShadow = true
+        window?.ignoresMouseEvents = false
+        window?.makeKey()
         computeFrames(widgetHeight: currentWidgetHeight)
         NotificationCenter.default.post(name: .notchPanelExpandedChanged, object: true)
         isAnimating = true
@@ -171,13 +208,12 @@ class NotchWindowController: NSWindowController {
         isExpanded = false
         isPinned = false
         window?.hasShadow = false
+        window?.ignoresMouseEvents = !isLive
         NotificationCenter.default.post(name: .notchPanelExpandedChanged, object: false)
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.3
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            window?.animator().setFrame(collapsedFrame, display: true)
-        } completionHandler: { [weak self] in
-            self?.window?.ignoresMouseEvents = true
+            window?.animator().setFrame(isLive ? liveFrame : collapsedFrame, display: true)
         }
     }
 
@@ -224,7 +260,7 @@ class NotchWindowController: NSWindowController {
 
     @objc private func screensChanged() {
         computeFrames(widgetHeight: currentWidgetHeight)
-        window?.setFrame(isExpanded ? expandedFrame : collapsedFrame, display: true)
+        window?.setFrame(isExpanded ? expandedFrame : (isLive ? liveFrame : collapsedFrame), display: true)
     }
 }
 
@@ -236,17 +272,45 @@ private extension Comparable {
     }
 }
 
+// MARK: - ClickThroughHostingView
+
+/// NSHostingView subclass that accepts the first mouse click as an action
+/// (rather than consuming it for key-window acquisition).
+/// Without this, every button in the panel requires two clicks: one to focus
+/// the window, one to trigger the action.
+private final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 // MARK: - NotchWindow
 
-class NotchWindow: NSWindow {
+/// NSPanel subclass used for the notch overlay.
+///
+/// Using NSPanel with .nonactivatingPanel is the correct pattern for floating
+/// utility panels on macOS (the same approach used by Alfred, Raycast, etc.).
+/// It lets the panel become the key window — so SwiftUI buttons receive events
+/// normally — without stealing the active-app status from the user's current app.
+class NotchWindow: NSPanel {
     override init(contentRect: NSRect, styleMask: NSWindow.StyleMask,
                   backing: NSWindow.BackingStoreType, defer flag: Bool) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 32),
-            styleMask: [.borderless, .fullSizeContentView],
+            styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered, defer: false
         )
+        isFloatingPanel = true
+        hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = false
     }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// If a click arrives while the panel is not key, make it key first so the
+    /// event is delivered to SwiftUI as an action (not consumed for focus).
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown && !isKeyWindow {
+            makeKey()
+        }
+        super.sendEvent(event)
+    }
 }

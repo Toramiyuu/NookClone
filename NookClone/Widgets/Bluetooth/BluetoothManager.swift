@@ -78,6 +78,7 @@ class BluetoothManager: ObservableObject {
     }
 
     private func observeConnectionEvents() {
+        guard CBManager.authorization == .allowedAlways else { return }
         connectNotif = IOBluetoothDevice.register(
             forConnectNotifications: self,
             selector: #selector(deviceConnected(_:device:))

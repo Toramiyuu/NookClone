@@ -4,10 +4,17 @@ A clean-room SwiftUI replica of [NotchNook](https://lo.cafe/notchnook) — a mac
 
 ## Features
 
+### Live Notch Pill
+When music is playing, the collapsed notch expands into a Dynamic Island-style live pill — album art on the left, animated spectrograph on the right. Flat top merges seamlessly with the physical notch; rounded bottom corners emerge below it. When nothing is playing, the pill hides entirely behind the notch.
+
+### Widgets
+
 | Widget | Description |
 |--------|-------------|
-| **Media** | Now-playing from Apple Music or Spotify, album art, audio spectrograph, playback controls |
+| **Media** | Now-playing from Apple Music or Spotify, album art, animated spectrograph, playback controls |
 | **Calendar** | Today's events via EventKit, color-coded by calendar |
+| **Clipboard** | Clipboard history manager with one-click paste and image preview |
+| **Bluetooth** | Connected device list with battery levels and connect/disconnect |
 | **Drop Area** | Drag-and-drop shelf for files, URLs, and text with AirDrop/Share actions |
 | **Notes** | Persistent rich-text notepad with bold/italic/underline formatting |
 | **HUD Replacement** | Custom volume and brightness overlay replacing the system HUD |
@@ -41,7 +48,7 @@ Then press **⌘R** to build and run.
 | Accessibility | HUD interception via CGEventTap |
 | Apple Music | Now-playing track info |
 | Calendar | Today's event display |
-| Microphone | Audio spectrograph visualization |
+| Microphone | _(not required — spectrograph is animated)_ |
 
 ## Architecture
 

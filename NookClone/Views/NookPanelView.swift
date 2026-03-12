@@ -46,6 +46,7 @@ struct NookPanelView: View {
         }
         .environment(\.colorScheme, .dark)
         .animation(.spring(response: 0.35, dampingFraction: 0.78), value: isExpanded)
+        .animation(.easeInOut(duration: 0.45), value: showLiveNotch)
         .onReceive(NotificationCenter.default.publisher(for: .notchPanelExpandedChanged)) { note in
             if let expanded = note.object as? Bool {
                 isExpanded = expanded
@@ -68,33 +69,66 @@ struct NookPanelView: View {
         }
     }
 
+    @ViewBuilder
     private var notchPill: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+        if showLiveNotch {
+            // Wider Dynamic Island-style pill — window has expanded to liveFrame
+            ZStack {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0, bottomLeadingRadius: 14,
+                    bottomTrailingRadius: 14, topTrailingRadius: 0,
+                    style: .continuous
+                )
                 .fill(.black)
 
-            // Hover glow — additive white overlay, no content switch
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(isPillHovered && !isExpanded ? 0.06 : 0))
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0, bottomLeadingRadius: 14,
+                    bottomTrailingRadius: 14, topTrailingRadius: 0,
+                    style: .continuous
+                )
+                .fill(.white.opacity(isPillHovered ? 0.06 : 0))
                 .animation(.easeInOut(duration: 0.15), value: isPillHovered)
 
-            // Priority: HUD > live media > clock
-            if let event = hudInfo, !isExpanded {
-                pillHUDContent(event: event)
-                    .transition(.opacity)
-            } else if let track = media.currentTrack, !isExpanded {
-                liveNotchContent(track: track)
-                    .transition(.opacity)
-            } else if !isExpanded {
-                pillClock
-                    .transition(.opacity)
+                if let event = hudInfo {
+                    pillHUDContent(event: event)
+                        .transition(.opacity)
+                } else if let track = media.currentTrack {
+                    liveNotchContent(track: track)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: hudInfo != nil)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipShape(UnevenRoundedRectangle(
+                topLeadingRadius: 0, bottomLeadingRadius: 14,
+                bottomTrailingRadius: 14, topTrailingRadius: 0,
+                style: .continuous
+            ))
+            .transition(.opacity)
+        } else {
+            // Static notch cap — hidden behind physical notch when collapsed
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.black)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.white.opacity(isPillHovered && !isExpanded ? 0.06 : 0))
+                    .animation(.easeInOut(duration: 0.15), value: isPillHovered)
+
+                if let event = hudInfo, !isExpanded {
+                    pillHUDContent(event: event)
+                        .transition(.opacity)
+                } else if !isExpanded {
+                    pillClock
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: hudInfo != nil)
+            .frame(width: 162, height: 32)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .transition(.opacity)
         }
-        .animation(.easeInOut(duration: 0.35), value: showLiveNotch)
-        .animation(.easeInOut(duration: 0.2), value: hudInfo != nil)
-        .frame(width: 162, height: 32)
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     // MARK: - Pill content layers
@@ -132,18 +166,11 @@ struct NookPanelView: View {
     @ViewBuilder
     private func liveNotchContent(track: TrackInfo) -> some View {
         HStack(spacing: 0) {
-            AlbumCoverView(artwork: track.artwork, size: 20)
-                .padding(.leading, 10)
-            Spacer(minLength: 6)
-            Text(track.title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 80)
-            Spacer(minLength: 6)
+            AlbumCoverView(artwork: track.artwork, size: 28)
+                .padding(.leading, 12)
+            Spacer()
             NotchMiniSpectrograph(isPlaying: track.isPlaying)
-                .padding(.trailing, 10)
+                .padding(.trailing, 12)
         }
     }
 }
