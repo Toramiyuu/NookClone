@@ -12,6 +12,7 @@ class NotchWindowController: NSWindowController {
 
     private(set) var isExpanded = false
     private var isPinned = false
+    private var isAnimating = false
     private var hoverTimer: Timer?
     private var isHoveringCollapsed = false
     private var cancellables = Set<AnyCancellable>()
@@ -110,7 +111,7 @@ class NotchWindowController: NSWindowController {
                 isHoveringCollapsed = false
                 NotificationCenter.default.post(name: .notchPillHoverChanged, object: false)
             }
-            if let frame = window?.frame, !frame.contains(mouse) { collapseIfNeeded() }
+            if !isAnimating, let frame = window?.frame, !frame.contains(mouse) { collapseIfNeeded() }
         }
     }
 
@@ -155,10 +156,13 @@ class NotchWindowController: NSWindowController {
         window?.hasShadow = true
         computeFrames(widgetHeight: currentWidgetHeight)
         NotificationCenter.default.post(name: .notchPanelExpandedChanged, object: true)
+        isAnimating = true
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.35
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             window?.animator().setFrame(expandedFrame, display: true)
+        } completionHandler: { [weak self] in
+            self?.isAnimating = false
         }
     }
 
@@ -179,8 +183,11 @@ class NotchWindowController: NSWindowController {
 
     func collapseIfNeeded() {
         guard !isPinned else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, !self.isPinned else { return }
+        // Don't start the collapse countdown while the user is clicking
+        guard NSEvent.pressedMouseButtons == 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, !self.isPinned, !self.isAnimating else { return }
+            guard NSEvent.pressedMouseButtons == 0 else { return }
             let mouse = NSEvent.mouseLocation
             if let frame = self.window?.frame, !frame.contains(mouse) {
                 self.collapse()

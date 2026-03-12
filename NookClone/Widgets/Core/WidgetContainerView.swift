@@ -28,47 +28,44 @@ struct WidgetContainerView: View {
     }
 
     private func tabBar(_ widgets: [WidgetRegistry.WidgetEntry]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                ForEach(widgets) { widget in
-                    let selected = isSelected(widget, in: widgets)
-                    Button {
-                        let currentIdx = widgets.firstIndex(where: { $0.id == selectedWidgetID }) ?? 0
-                        let newIdx = widgets.firstIndex(where: { $0.id == widget.id }) ?? 0
-                        slideForward = newIdx >= currentIdx
-                        // Post height immediately so window resizes in sync with the tab switch
-                        NotificationCenter.default.post(name: .notchPanelHeightChanged, object: widget.preferredHeight)
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            selectedWidgetID = widget.id
-                        }
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: widget.icon)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(selected ? .white : .white.opacity(0.35))
-                            Text(widget.title)
-                                .font(.system(size: 8, weight: .medium))
-                                .foregroundStyle(selected ? .white.opacity(0.9) : .white.opacity(0.3))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background {
-                            if selected {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(.white.opacity(0.18))
-                                    .matchedGeometryEffect(id: "tabIndicator", in: tabNamespace)
-                            }
+        HStack(spacing: 0) {
+            ForEach(widgets) { widget in
+                let selected = isSelected(widget, in: widgets)
+                Button {
+                    let currentIdx = widgets.firstIndex(where: { $0.id == selectedWidgetID }) ?? 0
+                    let newIdx = widgets.firstIndex(where: { $0.id == widget.id }) ?? 0
+                    slideForward = newIdx >= currentIdx
+                    NotificationCenter.default.post(name: .notchPanelHeightChanged, object: widget.preferredHeight)
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        selectedWidgetID = widget.id
+                    }
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: widget.icon)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(selected ? .white : .white.opacity(0.35))
+                        Text(widget.title)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(selected ? .white.opacity(0.9) : .white.opacity(0.3))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.white.opacity(0.18))
+                                .matchedGeometryEffect(id: "tabIndicator", in: tabNamespace)
+                                .padding(.horizontal, 4)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .scaleEffect(selected ? 1.05 : 1.0)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selected)
                 }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selected)
             }
-            .padding(.horizontal, 2)
         }
+        .padding(.horizontal, 4)
         .padding(.bottom, 6)
     }
 
